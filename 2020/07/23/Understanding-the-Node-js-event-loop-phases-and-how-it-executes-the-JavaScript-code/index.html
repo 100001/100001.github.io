@@ -1,199 +1,77 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE HTML>
+<html>
 <head>
-  <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
-<meta name="theme-color" content="#222">
-<meta name="generator" content="Hexo 4.2.1">
-  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
-  <link rel="mask-icon" href="/images/logo.svg" color="#222">
-
-<link rel="stylesheet" href="/css/main.css">
-
-
-<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
-
-<script id="hexo-configurations">
-    var NexT = window.NexT || {};
-    var CONFIG = {"hostname":"100001.github.io","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
-  </script>
-
-  <meta name="description" content="原文→我相信，如果您正在阅读本文，那么您一定已经听说了Node.js拥有著名的事件循环，它如何处理Node.js中的并发机制，以及它如何使Node.js成为事件驱动 I&#x2F;O 的独特平台。 作为事件驱动的 I&#x2F;O，执行的所有代码都是回调形式。 因此，重要的是要知道事件循环如何并且以何种顺序执行所有回调。 从这里开始，在此博客文章中，术语“事件循环”是指Node.js的事件循环。 从本质上讲，事件循">
-<meta property="og:type" content="article">
-<meta property="og:title" content="理解Node.js事件循环阶段及其执行JavaScript代码的方式">
-<meta property="og:url" content="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/index.html">
-<meta property="og:site_name" content="100001">
-<meta property="og:description" content="原文→我相信，如果您正在阅读本文，那么您一定已经听说了Node.js拥有著名的事件循环，它如何处理Node.js中的并发机制，以及它如何使Node.js成为事件驱动 I&#x2F;O 的独特平台。 作为事件驱动的 I&#x2F;O，执行的所有代码都是回调形式。 因此，重要的是要知道事件循环如何并且以何种顺序执行所有回调。 从这里开始，在此博客文章中，术语“事件循环”是指Node.js的事件循环。 从本质上讲，事件循">
-<meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/5dlikj6szekblxlaseo4.png">
-<meta property="og:image" content="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/or3evh6lkjcg4zu1l300.png">
-<meta property="og:image" content="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/xqave9c6288hgekmmvq5.gif">
-<meta property="article:published_time" content="2020-07-23T06:21:31.000Z">
-<meta property="article:modified_time" content="2020-07-23T08:25:14.772Z">
-<meta property="article:author" content="Zhongwen Wang">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/5dlikj6szekblxlaseo4.png">
-
-<link rel="canonical" href="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/">
-
-
-<script id="page-configurations">
-  // https://hexo.io/docs/variables.html
-  CONFIG.page = {
-    sidebar: "",
-    isHome : false,
-    isPost : true,
-    lang   : 'en'
-  };
-</script>
-
-  <title>理解Node.js事件循环阶段及其执行JavaScript代码的方式 | 100001</title>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="google-site-verification" content="" />
   
+  <title>理解Node.js事件循环阶段及其执行JavaScript代码的方式</title>
+  <meta name="author" content="Zhongwen Wang">
+  <meta name="description" content="原文→我相信，如果您正在阅读本文，那么您一定已经听说了Node.js拥有著名的事件循环，它如何处理Node.js中的并发机制，以及它如何使Node.js成为事件驱动 I/O 的独特平台。 作为事件驱动的 I/O，执行的所有代码都是回调形式。 因此，重要的是要知道事件循环如何并且以何种顺序执行所有回调">
+  
+  
+  <meta property="og:title" content="理解Node.js事件循环阶段及其执行JavaScript代码的方式"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:site_name" content="100001"/>
+  <link href="/apple-touch-icon-precomposed.png" sizes="180x180" rel="apple-touch-icon-precomposed">
+  <link rel="alternate" href="/atom.xml" title="100001" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/m.min.css">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML" async></script>
+<meta name="generator" content="Hexo 4.2.1"></head>
 
-
-
-
-
-
-  <noscript>
-  <style>
-  .use-motion .brand,
-  .use-motion .menu-item,
-  .sidebar-inner,
-  .use-motion .post-block,
-  .use-motion .pagination,
-  .use-motion .comments,
-  .use-motion .post-header,
-  .use-motion .post-body,
-  .use-motion .collection-header { opacity: initial; }
-
-  .use-motion .site-title,
-  .use-motion .site-subtitle {
-    opacity: initial;
-    top: initial;
-  }
-
-  .use-motion .logo-line-before i { left: initial; }
-  .use-motion .logo-line-after i { right: initial; }
-  </style>
-</noscript>
-
-<link rel="alternate" href="/atom.xml" title="100001" type="application/atom+xml">
-</head>
-
-<body itemscope itemtype="http://schema.org/WebPage">
-  <div class="container use-motion">
-    <div class="headband"></div>
-
-    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
-      <div class="header-inner"><div class="site-brand-container">
-  <div class="site-nav-toggle">
-    <div class="toggle" aria-label="Toggle navigation bar">
-      <span class="toggle-line toggle-line-first"></span>
-      <span class="toggle-line toggle-line-middle"></span>
-      <span class="toggle-line toggle-line-last"></span>
-    </div>
-  </div>
-
-  <div class="site-meta">
-
-    <a href="/" class="brand" rel="start">
-      <span class="logo-line-before"><i></i></span>
-      <h1 class="site-title">100001</h1>
-      <span class="logo-line-after"><i></i></span>
-    </a>
-  </div>
-
-  <div class="site-nav-right">
-    <div class="toggle popup-trigger">
-    </div>
+<body>
+  <a id="top"></a>
+  <div id="main">
+    <div class="main-ctnr">
+      <div class="behind">
+  <a href="/" class="back black-color">
+    <svg class="i-close" viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+        <path d="M2 30 L30 2 M30 30 L2 2"></path>
+    </svg>
+  </a>
+  <div class="description">
+    &nbsp;
   </div>
 </div>
 
 
-
-
-<nav class="site-nav">
-  <ul id="menu" class="main-menu menu">
-        <li class="menu-item menu-item-home">
-
-    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
-
-  </li>
-        <li class="menu-item menu-item-archives">
-
-    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
-
-  </li>
-  </ul>
-</nav>
-
-
-
-
-</div>
-    </header>
-
-    
-  <div class="back-to-top">
-    <i class="fa fa-arrow-up"></i>
-    <span>0%</span>
-  </div>
-
-
-    <main class="main">
-      <div class="main-inner">
-        <div class="content-wrap">
-          
-
-          <div class="content post posts-expand">
-            
-
-    
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
-    <link itemprop="mainEntityOfPage" href="https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="Zhongwen Wang">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="100001">
-    </span>
-      <header class="post-header">
-        <h1 class="post-title" itemprop="name headline">
-          理解Node.js事件循环阶段及其执行JavaScript代码的方式
-        </h1>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">Posted on</span>
-              
-
-              <time title="Created: 2020-07-23 14:21:31 / Modified: 16:25:14" itemprop="dateCreated datePublished" datetime="2020-07-23T14:21:31+08:00">2020-07-23</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
+  <article class="standard post">
+    <div class="title">
       
-        <p><img src="5dlikj6szekblxlaseo4.png" alt=""></p>
+  
+    <h1 class="page-title center">
+        理解Node.js事件循环阶段及其执行JavaScript代码的方式
+    </h1>
+  
+
+
+    </div>
+    <div class="meta center">
+      <time datetime="2020-07-23T06:21:31.000Z" itemprop="datePublished">
+  <svg class="i-calendar" viewBox="0 0 32 32" width="16" height="16" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M2 6 L2 30 30 30 30 6 Z M2 15 L30 15 M7 3 L7 9 M13 3 L13 9 M19 3 L19 9 M25 3 L25 9"></path>
+  </svg>
+  &nbsp;
+  2020-07-23
+</time>
+
+
+
+
+
+
+    </div>
+    <hr>
+    
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#原文→"><span class="toc-text">原文→</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#其余"><span class="toc-text">其余:</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#微任务-Microtasks"><span class="toc-text">微任务(Microtasks):</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#宏任务-Macrotasks"><span class="toc-text">宏任务(Macrotasks):</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#事件循环Tick"><span class="toc-text">事件循环Tick:</span></a></li></ol>
+    
+    <div class="picture-container">
+      
+    </div>
+    <p><img src="5dlikj6szekblxlaseo4.png" alt=""></p>
 <h4 id="原文→"><a href="#原文→" class="headerlink" title="原文→"></a><a href="https://dev.to/lunaticmonk/understanding-the-node-js-event-loop-phases-and-how-it-executes-the-javascript-code-1j9" target="_blank" rel="noopener">原文→</a></h4><p>我相信，如果您正在阅读本文，那么您一定已经听说了Node.js拥有著名的事件循环，它如何处理Node.js中的并发机制，以及它如何使Node.js成为事件驱动 I/O 的独特平台。 作为事件驱动的 I/O，执行的所有代码都是回调形式。 因此，重要的是要知道事件循环如何并且以何种顺序执行所有回调。 从这里开始，在此博客文章中，术语“事件循环”是指Node.js的事件循环。</p>
 <p>从本质上讲，事件循环是一种在某些阶段进行迭代的机制。 您肯定听说过一个称为“事件循环迭代”的术语，该术语表示事件循环迭代贯穿其所有阶段。</p>
 <p>在本文中，我将向您展示事件循环的底层架构及其所有阶段是什么，在哪个阶段中执行哪些代码，以及一些细节和最后一些示例，我认为它们将使您更好地理解关于事件循环的概念。</p>
@@ -290,176 +168,67 @@
 <h5 id="宏任务-Macrotasks"><a href="#宏任务-Macrotasks" class="headerlink" title="宏任务(Macrotasks):"></a>宏任务(Macrotasks):</h5><p>诸如setTimeout，setInterval，setImmediate，requestAnimationFrame，I / O，UI渲染或其他I / O回调之类的任务都属于宏任务（Macrotasks）。 他们没有事件循环优先级之类的东西。 回调是根据事件循环阶段执行的。</p>
 <h4 id="事件循环Tick"><a href="#事件循环Tick" class="headerlink" title="事件循环Tick:"></a>事件循环Tick:</h4><p>我们说事件循环在其所有阶段迭代一次（事件循环的一次迭代）即是一次tick。<br>事件循环tick频率高和tick持续时间短（一次迭代所花费的时间）表示健康的事件循环。</p>
 
-    </div>
 
-    
-    
-    
-
-      <footer class="post-footer">
-
-        
-
-
-        
-      </footer>
-    
   </article>
-  
-  
-  
-
-
-
-          </div>
-          
-
-<script>
-  window.addEventListener('tabs:register', () => {
-    let { activeClass } = CONFIG.comments;
-    if (CONFIG.comments.storage) {
-      activeClass = localStorage.getItem('comments_active') || activeClass;
-    }
-    if (activeClass) {
-      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
-      if (activeTab) {
-        activeTab.click();
-      }
-    }
-  });
-  if (CONFIG.comments.storage) {
-    window.addEventListener('tabs:click', event => {
-      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
-      let commentClass = event.target.classList[1];
-      localStorage.setItem('comments_active', commentClass);
-    });
-  }
-</script>
-
-        </div>
-          
-  
-  <div class="toggle sidebar-toggle">
-    <span class="toggle-line toggle-line-first"></span>
-    <span class="toggle-line toggle-line-middle"></span>
-    <span class="toggle-line toggle-line-last"></span>
+  </script>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js">
+  </script>
+  <div class="busuanzi center">
+    page PV:&nbsp;<span id="busuanzi_value_page_pv"></span>&nbsp;・&nbsp;
+    site PV:&nbsp;<span id="busuanzi_value_site_pv"></span>&nbsp;・&nbsp;
+    site UV:&nbsp;<span id="busuanzi_value_site_uv"></span>
   </div>
 
-  <aside class="sidebar">
-    <div class="sidebar-inner">
 
-      <ul class="sidebar-nav motion-element">
-        <li class="sidebar-nav-toc">
-          Table of Contents
-        </li>
-        <li class="sidebar-nav-overview">
-          Overview
-        </li>
-      </ul>
-
-      <!--noindex-->
-      <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#原文→"><span class="nav-number">1.</span> <span class="nav-text">原文→</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#其余"><span class="nav-number">2.</span> <span class="nav-text">其余:</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#微任务-Microtasks"><span class="nav-number">2.1.</span> <span class="nav-text">微任务(Microtasks):</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#宏任务-Macrotasks"><span class="nav-number">2.2.</span> <span class="nav-text">宏任务(Macrotasks):</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#事件循环Tick"><span class="nav-number">3.</span> <span class="nav-text">事件循环Tick:</span></a></li></ol></div>
-      </div>
-      <!--/noindex-->
-
-      <div class="site-overview-wrap sidebar-panel">
-        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
-  <p class="site-author-name" itemprop="name">Zhongwen Wang</p>
-  <div class="site-description" itemprop="description"></div>
-</div>
-<div class="site-state-wrap motion-element">
-  <nav class="site-state">
-      <div class="site-state-item site-state-posts">
-          <a href="/archives/">
-        
-          <span class="site-state-item-count">1</span>
-          <span class="site-state-item-name">posts</span>
-        </a>
-      </div>
-  </nav>
-</div>
+    
 
 
 
-      </div>
+
 
     </div>
-  </aside>
-  <div id="sidebar-dimmer"></div>
-
-
-      </div>
-    </main>
-
-    <footer class="footer">
-      <div class="footer-inner">
-        
-
-        
-
-<div class="copyright">
-  
-  &copy; 
-  <span itemprop="copyrightYear">2020</span>
-  <span class="with-love">
-    <i class="fa fa-heart"></i>
-  </span>
-  <span class="author" itemprop="copyrightHolder">Zhongwen Wang</span>
+  </div>
+  <footer class="page-footer"><div class="clearfix">
 </div>
-  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a>
-  </div>
+<div class="right-foot">
+    <div class="firstrow">
+        <a href="#top" target="_self">
+        <svg class="i-caret-right" viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+            <path d="M10 30 L26 16 10 2 Z"></path>
+        </svg>
+        </a>
+        © 100001 2020
+    </div>
+    <div class="secondrow">
+        <a href="https://github.com/100001/100001.github.io" target="_blank" rel="noopener">
+        My Hub
+        </a>
+    </div>
+</div>
+<div class="clearfix">
+</div>
+</footer>
+  <script src="//cdn.bootcss.com/jquery/2.2.1/jquery.min.js"></script>
+<script src="/js/search.min.js"></script>
+<script type="text/javascript">
 
-        
-
-
-
-
-
-
-
-
-      </div>
-    </footer>
-  </div>
-
-  
-  <script src="/lib/anime.min.js"></script>
-  <script src="/lib/velocity/velocity.min.js"></script>
-  <script src="/lib/velocity/velocity.ui.min.js"></script>
-
-<script src="/js/utils.js"></script>
-
-<script src="/js/motion.js"></script>
-
-
-<script src="/js/schemes/muse.js"></script>
+// disqus scripts
 
 
-<script src="/js/next-boot.js"></script>
+// dropdown scripts
+$(".dropdown").click(function(event) {
+  var current = $(this);
+  event.stopPropagation();
+  $(current).children(".dropdown-content")[($(current).children(".dropdown-content").hasClass("open"))?'removeClass':'addClass']("open")
+});
+$(document).click(function(){
+    $(".dropdown-content").removeClass("open");
+})
 
+var path = "/search.xml";
+searchFunc(path, 'local-search-input', 'local-search-result');
 
-
-
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-
-  
+</script>
 
 </body>
 </html>
