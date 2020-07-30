@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://100001.github.io/2020/07/29/The-Cost-of-JavaScript-in-2019/</loc>
+    
+    <lastmod>2020-07-30T03:58:41.484Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>https://100001.github.io/2020/07/23/Understanding-the-Node-js-event-loop-phases-and-how-it-executes-the-JavaScript-code/</loc>
     
     <lastmod>2020-07-23T08:25:14.772Z</lastmod>

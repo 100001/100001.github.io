@@ -1,0 +1,232 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="google-site-verification" content="" />
+  
+  <title>2019年JavaScript的开销</title>
+  <meta name="author" content="Zhongwen Wang">
+  <meta name="description" content="原文→
+注意：如果你喜欢看演示文稿而不是阅读文章，那么请欣赏下面的视频！如果不是，跳过视频继续阅读。
+
+
+
+“JavaScript的开销”由Addy Osmani在2019#PerfMatters大会上发表。
+在过去几年里，JavaScript开销的一大变化是浏览器解析和编译脚本的速度有所提升。在2">
+  
+  
+  <meta property="og:title" content="2019年JavaScript的开销"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:site_name" content="100001"/>
+  <link href="/apple-touch-icon-precomposed.png" sizes="180x180" rel="apple-touch-icon-precomposed">
+  <link rel="alternate" href="/atom.xml" title="100001" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/m.min.css">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML" async></script>
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+  <a id="top"></a>
+  <div id="main">
+    <div class="main-ctnr">
+      <div class="behind">
+  <a href="/" class="back black-color">
+    <svg class="i-close" viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+        <path d="M2 30 L30 2 M30 30 L2 2"></path>
+    </svg>
+  </a>
+  <div class="description">
+    &nbsp;
+  </div>
+</div>
+
+
+  <article class="standard post">
+    <div class="title">
+      
+  
+    <h1 class="page-title center">
+        2019年JavaScript的开销
+    </h1>
+  
+
+
+    </div>
+    <div class="meta center">
+      <time datetime="2020-07-29T03:03:44.000Z" itemprop="datePublished">
+  <svg class="i-calendar" viewBox="0 0 32 32" width="16" height="16" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M2 6 L2 30 30 30 30 6 Z M2 15 L30 15 M7 3 L7 9 M13 3 L13 9 M19 3 L19 9 M25 3 L25 9"></path>
+  </svg>
+  &nbsp;
+  2020-07-29
+</time>
+
+
+
+
+
+
+    </div>
+    <hr>
+    
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#原文→"><span class="toc-text">原文→</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#可行的高级方案"><span class="toc-text">可行的高级方案</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#为什么下载和执行时间很重要？"><span class="toc-text">为什么下载和执行时间很重要？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#V8在改进解析-编译方面做了什么？"><span class="toc-text">V8在改进解析&#x2F;编译方面做了什么？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#这些变化如何反映你在DevTools中看到的内容？"><span class="toc-text">这些变化如何反映你在DevTools中看到的内容？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#这些变化对现实场景的影响是什么？"><span class="toc-text">这些变化对现实场景的影响是什么？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#解析JSON的开销"><span class="toc-text">解析JSON的开销</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#对于重复访问的解析-编译呢？"><span class="toc-text">对于重复访问的解析&#x2F;编译呢？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#结论"><span class="toc-text">结论</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#延伸阅读"><span class="toc-text">延伸阅读</span></a></li></ol>
+    
+    <div class="picture-container">
+      
+    </div>
+    <h4 id="原文→"><a href="#原文→" class="headerlink" title="原文→"></a><a href="https://v8.dev/blog/cost-of-javascript-2019" target="_blank" rel="noopener">原文→</a></h4><blockquote>
+<p>注意：如果你喜欢看演示文稿而不是阅读文章，那么请欣赏下面的视频！如果不是，跳过视频继续阅读。</p>
+</blockquote>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/X9eRLElSW1c" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<p><font size=2>“JavaScript的开销”由Addy Osmani在2019#PerfMatters大会上发表。</font></p>
+<p>在过去几年里，JavaScript开销的一大变化是浏览器解析和编译脚本的速度有所提升。<strong>在2019年，处理脚本的主要开销是下载和CPU执行时间。</strong></p>
+<p>如果浏览器的主线程忙于执行JavaScript，那么用户交互可能会延迟，因此优化脚本执行时间和网络的瓶颈可能会很有效果。</p>
+<h4 id="可行的高级方案"><a href="#可行的高级方案" class="headerlink" title="可行的高级方案"></a>可行的高级方案</h4><p>这对web开发人员意味着什么？解析和编译开销不再像我们曾经认为的那样慢。JavaScript打包（bundle）需要关注的三件事是：</p>
+<blockquote>
+<p>译者注：对于bundle这个单词，在不同的上下文中，目前没有找到一个通用的中文词汇来翻译，因此直接用bundle也许更方便理解（类似的单词还包括chunk，worker等）</p>
+</blockquote>
+<ul>
+<li><strong>减少下载时间</strong><ul>
+<li>保持较小的JavaScript bundle，尤其是对于移动设备。体积小的bundle能够提高下载速度，降低内存使用率，并减少CPU消耗。</li>
+<li>避免只有一个大的bundle；如果一个bundle超过50–100 kB，请将其拆分为独立且较小的bundle。（使用HTTP/2的多路复用，可以同时传递多个请求和响应消息，从而减少额外请求的开销。）</li>
+<li>在移动设备上，由于网络速度的原因，你不希望过多的传输，而且还要保持低内存使用率。</li>
+</ul>
+</li>
+<li><strong>改进执行时间</strong><ul>
+<li>避免<a href="https://w3c.github.io/longtasks/" target="_blank" rel="noopener">耗时的任务</a>，因为这些任务会使主线程持续繁忙，并且会阻碍页面交互的速度。下载后，脚本执行时间现在是主要的开销。</li>
+</ul>
+</li>
+<li><strong>避免使用大体积的内联脚本</strong>（因为它们仍然在主线程上被解析和编译）。一个好的经验法则是：如果脚本超过1KB，请避免内联它（这也是因为外部脚本的代码缓存起始于1KB）。</li>
+</ul>
+<h4 id="为什么下载和执行时间很重要？"><a href="#为什么下载和执行时间很重要？" class="headerlink" title="为什么下载和执行时间很重要？"></a>为什么下载和执行时间很重要？</h4><p>为什么优化下载和执行时间很重要？对于低速网络，下载时间至关重要。尽管4G（甚至5G）在世界各地都在增长，但我们的<a href="https://developer.mozilla.org/en-US/docs/Web/API/NetworkInformation/effectiveType" target="_blank" rel="noopener">有效连接类型</a>仍然不一致，因为我们中的许多人在旅途中遇到了感觉像3G（或更糟）的速度。</p>
+<p>JavaScript的执行时间对于CPU速度慢的手机很重要。由于CPU、GPU和温控调频的不同，高端和低端手机的性能存在巨大差异。这对JavaScript的性能很重要，因为执行是受CPU限制的。</p>
+<p>事实上，在Chrome这样的浏览器中，页面加载所花费的总时间中，有多达30%的时间用于JavaScript的执行。下图是在高端台式机上加载一个具有典型工作负载网站的页面（Reddit.com）：<br><img src="reddit-js-processing.svg" alt=""><br><font size=2>在V8中，JavaScript的执行过程占页面加载阶段所用时间的10-30%。</font></p>
+<p>在移动设备上，与高端设备（Pixel 3）相比，中端手机（Moto G4）执行Reddit JavaScript的时间要长3-4倍，而在低端设备（低于100美元的Alcatel 1X）上，执行时间超过6倍：<br><img src="reddit-js-processing-devices.svg" alt=""><br><font size=2>Reddit的JavaScript在不同分类的设备（低端、普通和高端）上的耗时开销</font></p>
+<blockquote>
+<p>注意：Reddit在桌面端和移动端网页上有不同的体验，因此MacBook Pro的结果无法与其他结果进行比较。</p>
+</blockquote>
+<p>当你试图优化JavaScript的执行时间时，请注意可能会长期独占UI线程的<a href="https://web.dev/long-tasks-devtools/" target="_blank" rel="noopener">长任务</a>。即使页面看起来已经准备好了，也可以阻止关键任务的执行。把这些分解成更小的任务。通过拆分代码并确定加载顺序的优先级，你可以更快地让页面交互，并有望降低输入延迟。<br><img src="long-tasks@2x.png" alt=""><br><font size=2>长任务占据了主线程。你应该把它们分开。</font></p>
+<h4 id="V8在改进解析-编译方面做了什么？"><a href="#V8在改进解析-编译方面做了什么？" class="headerlink" title="V8在改进解析/编译方面做了什么？"></a>V8在改进解析/编译方面做了什么？</h4><p>V8中的原始JavaScript解析速度比chrome60提高了2倍。同时，由于Chrome中的其他并行优化工作，原始解析（和编译）开销变得不那么明显/重要。</p>
+<p>通过在Worker线程上解析和编译，V8平均减少了40%的主线程解析和编译工作量（例如，Facebook减少了46%，Pinterest减少了62%），最大的改进达到81%（YouTube）。这是对现有非主线程流式解析/编译的补充。<br><img src="chrome-js-parse-times.svg" alt=""><br><font size=2>不同版本的V8解析时间</font></p>
+<p>我们还可以在Chrome发布的不同V8版本中可视化这些变化对CPU时间的影响。在Chrome61解析Facebook JS的同等时间内，现在Chrome75可以同时解析Facebook的JS和6倍Twitter的JS。<br><img src="js-parse-times-websites.svg" alt=""><br><font size=2>在Chrome61解析Facebook的JS时，Chrome75现在可以同时解析Facebook的JS和6倍Twitter的JS。</font></p>
+<p>让我们深入了解这些变化是如何解锁的。简而言之，脚本资源可以在Worker线程上进行流式解析和编译，这意味着：</p>
+<ul>
+<li>V8可以解析+编译JavaScript而不阻塞主线程。</li>
+<li>当完整的HTML解析器遇到&lt;script&gt;标签时，流解析就开始了。对于解析器阻塞脚本，HTML解析器暂停，而对于异步脚本则继续。</li>
+<li>对于大多数实际的连接速度，V8的解析速度比下载快，因此V8在最后一个脚本字节下载后几毫秒内完成解析+编译。</li>
+</ul>
+<p>不那么简短的解释是…Chrome的老版本会在开始解析脚本之前下载完整的脚本，这是一种简单的方法，但它没有充分利用CPU。在41到68版本之间，一旦下载开始，Chrome就开始在一个单独的线程上解析async和defer脚本。<br><img src="script-streaming-1.svg" alt=""><br><font size=2>脚本以多个chunk的形式下载到浏览器。V8在接收到至少30kB时开始流式解析。</font></p>
+<p>在Chrome71中，我们转向了基于任务的设置，在这种设置中，调度器可以同时解析多个async/defer脚本。这一变化的好处是主线程解析时间减少了约20%，根据实际网站的测量，TTI（Time To Interactive）/FID（First Input Delay）总体上提高了约2%。<br><img src="script-streaming-2.svg" alt=""><br><font size=2>Chrome71迁移到基于任务的设置中，调度器可以同时解析多个async/defer脚本。</font></p>
+<p>在Chrome72中，我们切换到使用流作为主要的解析方式：现在也可以用这种方式解析常规的同步脚本（虽然不是内联脚本）。如果主线程需要的话，我们也停止了取消基于任务的解析，因为这会不必要地重复已经完成的任何工作。</p>
+<p><a href="https://v8.dev/blog/v8-release-75#script-streaming-directly-from-network" target="_blank" rel="noopener">Chrome以前的版本</a>支持流式解析和编译，其中来自网络的脚本源数据必须先到达Chrome的主线程，然后才能转发到流处理器（streamer）。</p>
+<p>这通常会导致流式解析器等待，因为主线程上的其他工作（如HTML解析、布局或JavaScript执行）阻塞了已经从网络下载的数据转发到流任务。</p>
+<p>我们现在正尝试性的在预加载时开始解析，而main-thread-bounce（主线程回弹）在这之前会阻塞。</p>
+<p>Leszek Swirski’s BlinkOn 演示呈现了更多细节:</p>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/D1UJgiG4_NI" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<h4 id="这些变化如何反映你在DevTools中看到的内容？"><a href="#这些变化如何反映你在DevTools中看到的内容？" class="headerlink" title="这些变化如何反映你在DevTools中看到的内容？"></a>这些变化如何反映你在DevTools中看到的内容？</h4><p>除上述之外，DevTools中有个问题，它在呈现整个解析器任务时示意自己正在使用CPU（完全阻塞）。因此，每当解析器需要数据（需要遍历主线程）时，它都会阻塞。当我们从单个流处理器（streamer）线程切换到若干个流式（streaming）任务时，这个问题变得非常明显。以下是你在Chrome69中看到的：<br><img src="devtools-69@2x.png" alt=""><br><font size=2>DevTools的问题是呈现整个解析器任务时示意它正在使用CPU（完全阻塞）</font></p>
+<p>显示“Parse Script”任务需要1.08秒。然而，解析JavaScript并没有那么慢！大部分时间什么都没做，除了等待数据通过主线程。</p>
+<p>Chrome 76描绘了一幅不同的画面：<br><img src="devtools-76@2x.png" alt=""><br><font size=2>在Chrome76中，解析被分解成多个更小的流式任务。</font></p>
+<p>通常，DevTools性能面板对于全面了解页面上正在发生的事情非常有用。对于具体的V8特定指标，如JavaScript解析和编译时间，我们建议<a href="https://v8.dev/docs/rcs" target="_blank" rel="noopener">使用Chrome跟踪和运行时调用统计（RCS）</a>。在RCS结果中，Parse-Background和Compile-Background告诉你在主线程之外解析和编译JavaScript花费了多少时间，而Parse 和 Compile则捕获主线程指标。<br><img src="rcs@2x.png" alt=""></p>
+<h4 id="这些变化对现实场景的影响是什么？"><a href="#这些变化对现实场景的影响是什么？" class="headerlink" title="这些变化对现实场景的影响是什么？"></a>这些变化对现实场景的影响是什么？</h4><p>让我们看一些真实网站的示例，以及如何处理脚本流。<br><img src="reddit-main-thread.svg" alt=""><br><font size=2>主线程vs Worker线程在MacBookPro上解析和编译Reddit的JS所花费的时间</font></p>
+<p>Reddit.com网站有几个超过100kb的bundle，这些bundle被封装在外部函数中，导致主线程上的大量<a href="https://v8.dev/blog/preparser" target="_blank" rel="noopener">延迟编译</a>。如上图，真正的问题是主线程的耗时，因为主线程持续占用会延迟交互体验。Reddit将大部分时间花在主线程上，而Worker/Background线程的使用量很低。</p>
+<p>他们可以将一些较大的bundle拆分成较小的bundle（例如每个50kb）且无需封装来获得收益，从而达到最大程度的并行，这样每个bundle都可以流式解析+单独编译，并减少启动期间的主线程解析/编译。<br><img src="facebook-main-thread.svg" alt=""><br><font size=2>主线程vs Worker线程在MacBookPro上解析和编译Facebook的JS所花费的时间</font></p>
+<p>我们也可以看看Facebook.com。 Facebook约292个请求中加载了6MB左右的压缩JS，有些是异步的，有些是预加载的，有些是以较低优先级获取的。它们的许多脚本都非常小而且粒度很细，也因此可以同时进行流式解析/编译，从而有助于在Background/Worker线程上进行整体并行化。</p>
+<p>注意，很可能你不是Facebook，并且没有类似Facebook或者Gmail这样历史悠久的适合大量脚本的桌面应用。但通常情况下，bundle需要保持粗粒度并且按需加载。</p>
+<p>尽管大多数JavaScript解析和编译工作可以在Background线程上以流的方式进行，但仍有一些工作必须在主线程上进行。当主线程繁忙时，页面无法响应用户输入。请注意下载和执行代码对用户体验的影响。</p>
+<blockquote>
+<p>注意：目前，并不是所有JavaScript引擎和浏览器都将脚本流作为加载优化来实现。我们仍然相信，这里的总体指导会提升整体的用户体验。</p>
+</blockquote>
+<h4 id="解析JSON的开销"><a href="#解析JSON的开销" class="headerlink" title="解析JSON的开销"></a>解析JSON的开销</h4><p>因为JSON语法比JavaScript语法简单得多，所以JSON的解析比JavaScript更高效。基于这个前提，通过大型的类似JSON的配置对象字面量（例如内联Redux stores）可以提升web应用程序的启动性能，而不是通过数据内联为JavaScript对象字面量实现，如下所示：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> data = &#123; <span class="attr">foo</span>: <span class="number">42</span>, <span class="attr">bar</span>: <span class="number">1337</span> &#125;; <span class="comment">// 🐌</span></span><br></pre></td></tr></table></figure>
+<p>…它可以用JSON字符串的形式表示，然后在运行时解析JSON：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> data = <span class="built_in">JSON</span>.parse(<span class="string">'&#123;"foo":42,"bar":1337&#125;'</span>); <span class="comment">// 🚀</span></span><br></pre></td></tr></table></figure>
+<p>只要JSON字符串仅仅计算一次，那么JSON.parse方法要比JavaScript对象字面量<a href="https://github.com/GoogleChromeLabs/json-parse-benchmark" target="_blank" rel="noopener">快得多</a>，尤其是对于冷加载。将此技术应用于10kb或更大的对象是一条很好的经验法则，但与通常的性能建议一样，在进行任何更改之前先测量实际效果。<br><img src="json.svg" alt=""><br><font size=2>JSON.parse(‘…’)相比于等价的JavaScript字面量，在解析，编译和执行上要<a href="https://github.com/GoogleChromeLabs/json-parse-benchmark" target="_blank" rel="noopener">快得多</a>— 不仅仅是V8（快1.7倍），所有主要的JavaScript引擎都如此</font></p>
+<p>下面的视频将从02:10开始详细介绍性能差异的来源。</p>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/ff4fgQxPaO0?start=130" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<p><font size=2>“使用JSON.parse加速应用程序“Mathias Bynens在2019年#ChromeDevSummit上提出的。</font></p>
+<p>请参阅<a href="https://v8.dev/features/subsume-json#embedding-json-parse" target="_blank" rel="noopener">我们的JSON⊂ECMAScript功能解释器</a>以获取一个示例实现，该实现在给定任意对象的情况下生成一个有效的JavaScript程序，然后通过JSON.parse处理它</p>
+<p>对于大量数据使用普通对象字面量还有一个额外的风险：它们可能被解析两次！</p>
+<ol>
+<li>第一次发生在字面量准备就绪时。</li>
+<li>第二次发生在字面量被延迟解析时。</li>
+</ol>
+<p>第一次不能避免。幸运的是，第二次通过将对象字面量放在顶层或<a href="https://v8.dev/blog/preparser#pife" target="_blank" rel="noopener">PIFE</a>内，可以避免。</p>
+<h4 id="对于重复访问的解析-编译呢？"><a href="#对于重复访问的解析-编译呢？" class="headerlink" title="对于重复访问的解析/编译呢？"></a>对于重复访问的解析/编译呢？</h4><p>V8的（字节）代码缓存优化可以帮助您。当第一次请求一个脚本时，Chrome会下载它并将其提供给V8进行编译。它还将文件存储在浏览器的磁盘缓存中。当第二次请求JS文件时，Chrome从浏览器缓存中获取该文件，并再次将其交给V8进行编译。但是，这一次，编译的代码被序列化，并作为元数据附加到缓存的脚本文件中。<br><img src="code-caching@2x.png" alt=""><br><font size=2>代码缓存在V8中工作方式的可视化</font></p>
+<p>第三次，Chrome从缓存中获取文件和文件的元数据，并将两者都交给V8。V8反序列化元数据，可以跳过编译。如果前两次访问发生在72小时内，则代码缓存将起作用。如果使用ServiceWorker缓存脚本，Chrome同样也具有代码缓存功能。你可以在<a href="https://v8.dev/blog/code-caching-for-devs" target="_blank" rel="noopener">面向web开发人员的代码缓存</a>中阅读更多有关代码缓存的信息。</p>
+<h4 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h4><p>在2019年，下载和执行时间是加载脚本的主要瓶颈。你可以为首屏内容设计一个小的同步（内联）脚本，页面其余部分使用若干defer脚本。分解大bundle，这样你就只关注在用户需要的时候发送他们需要的代码，可以最大化V8的并行处理。</p>
+<p>在移动设备上，由于网络、内存消耗和较慢CPU的执行时间，你应该发送更少的脚本。在延迟和可缓存性之间进行平衡，以最大限度地增加主线程之外可能发生的解析和编译工作量。</p>
+<h4 id="延伸阅读"><a href="#延伸阅读" class="headerlink" title="延伸阅读"></a>延伸阅读</h4><ul>
+<li><a href="https://v8.dev/blog/scanner" target="_blank" rel="noopener">极快的解析，第1部分：优化扫描</a></li>
+<li><a href="https://v8.dev/blog/preparser" target="_blank" rel="noopener">极快的解析，第2部分：惰性解析</a></li>
+</ul>
+
+
+  </article>
+  </script>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js">
+  </script>
+  <div class="busuanzi center">
+    page PV:&nbsp;<span id="busuanzi_value_page_pv"></span>&nbsp;・&nbsp;
+    site PV:&nbsp;<span id="busuanzi_value_site_pv"></span>&nbsp;・&nbsp;
+    site UV:&nbsp;<span id="busuanzi_value_site_uv"></span>
+  </div>
+
+
+    
+
+
+
+
+
+    </div>
+  </div>
+  <footer class="page-footer"><div class="clearfix">
+</div>
+<div class="right-foot">
+    <div class="firstrow">
+        <a href="#top" target="_self">
+        <svg class="i-caret-right" viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+            <path d="M10 30 L26 16 10 2 Z"></path>
+        </svg>
+        </a>
+        © 100001 2020
+    </div>
+    <div class="secondrow">
+        <a href="https://github.com/100001/100001.github.io/issues" target="_blank" rel="noopener">
+        ☞评论
+        </a>
+    </div>
+</div>
+<div class="clearfix">
+</div>
+</footer>
+  <script src="//cdn.bootcss.com/jquery/2.2.1/jquery.min.js"></script>
+<script src="/js/search.min.js"></script>
+<script type="text/javascript">
+
+// disqus scripts
+
+
+// dropdown scripts
+$(".dropdown").click(function(event) {
+  var current = $(this);
+  event.stopPropagation();
+  $(current).children(".dropdown-content")[($(current).children(".dropdown-content").hasClass("open"))?'removeClass':'addClass']("open")
+});
+$(document).click(function(){
+    $(".dropdown-content").removeClass("open");
+})
+
+var path = "/search.xml";
+searchFunc(path, 'local-search-input', 'local-search-result');
+
+</script>
+
+</body>
+</html>
