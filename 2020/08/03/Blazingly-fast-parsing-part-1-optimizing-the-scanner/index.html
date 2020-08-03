@@ -1,0 +1,164 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="google-site-verification" content="" />
+  
+  <title>极速解析（一）: 优化扫描器</title>
+  <meta name="author" content="Zhongwen Wang">
+  <meta name="description" content="原文→要运行JavaScript程序，需要处理源代码文本，以便V8能够理解它。V8首先将源代码解析为一棵抽象语法树（AST），这是一组表示程序结构的对象。然后AST被Ignition编译成字节码。这些解析+编译阶段的性能非常重要：V8在编译完成之前不能运行代码。在这一系列的博客文章中，我们将重点放在">
+  
+  
+  <meta property="og:title" content="极速解析（一）: 优化扫描器"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:site_name" content="100001"/>
+  <link href="/apple-touch-icon-precomposed.png" sizes="180x180" rel="apple-touch-icon-precomposed">
+  <link rel="alternate" href="/atom.xml" title="100001" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/m.min.css">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML" async></script>
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+  <a id="top"></a>
+  <div id="main">
+    <div class="main-ctnr">
+      <div class="behind">
+  <a href="/" class="back black-color">
+    <svg class="i-close" viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+        <path d="M2 30 L30 2 M30 30 L2 2"></path>
+    </svg>
+  </a>
+  <div class="description">
+    &nbsp;
+  </div>
+</div>
+
+
+  <article class="standard post">
+    <div class="title">
+      
+  
+    <h1 class="page-title center">
+        极速解析（一）: 优化扫描器
+    </h1>
+  
+
+
+    </div>
+    <div class="meta center">
+      <time datetime="2020-08-02T16:28:09.000Z" itemprop="datePublished">
+  <svg class="i-calendar" viewBox="0 0 32 32" width="16" height="16" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M2 6 L2 30 30 30 30 6 Z M2 15 L30 15 M7 3 L7 9 M13 3 L13 9 M19 3 L19 9 M25 3 L25 9"></path>
+  </svg>
+  &nbsp;
+  2020-08-03
+</time>
+
+
+
+
+
+
+    </div>
+    <hr>
+    
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#原文→"><span class="toc-text">原文→</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#空白符（Whitespace）"><span class="toc-text">空白符（Whitespace）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#标识符扫描"><span class="toc-text">标识符扫描</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#内化精简标识符（Internalizing-minified-identifiers）"><span class="toc-text">内化精简标识符（Internalizing minified identifiers）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#关键字（Identifier-scanning）"><span class="toc-text">关键字（Identifier scanning）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#代理对（Surrogate-pairs）"><span class="toc-text">代理对（Surrogate pairs）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#AdvanceUntil"><span class="toc-text">AdvanceUntil</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#结论"><span class="toc-text">结论</span></a></li></ol>
+    
+    <div class="picture-container">
+      
+    </div>
+    <h4 id="原文→"><a href="#原文→" class="headerlink" title="原文→"></a><a href="https://v8.dev/blog/scanner" target="_blank" rel="noopener">原文→</a></h4><p>要运行JavaScript程序，需要处理源代码文本，以便V8能够理解它。V8首先将源代码解析为一棵抽象语法树（AST），这是一组表示程序结构的对象。然后AST被<a href="https://v8.dev/blog/ignition-interpreter" target="_blank" rel="noopener">Ignition</a>编译成字节码。这些解析+编译阶段的性能非常重要：V8在编译完成之前不能运行代码。在这一系列的博客文章中，我们将重点放在解析上，以及V8实现的快速解析器所完成的工作。</p>
+<p>实际上，我们在解析器之前的一个阶段就开始了这个系列。V8的解析器读取的“tokens”是由“扫描器”提供的。Token是由若干具有单一语义含义的字符组成的块：字符串、标识符、运算符（例如：<code>++</code>）。扫描器通过组合底层字符流中的连续字符来构造这些tokens。</p>
+<p>扫描器读取的是一串Unicode字符流。这些Unicode字符总是从UTF-16<a href="https://stackoverflow.com/questions/27331819/whats-the-difference-between-a-character-a-code-point-a-glyph-and-a-grapheme" target="_blank" rel="noopener">代码单元</a>流中解码。我们之所以只支持UTF-16编码规范，是为了避免对各种编码规范进行区分或定制化的扫描解析，同时这也是JavaScript字符串的编码规范，且源代码定位依赖于该编码规范。<a href="https://cs.chromium.org/chromium/src/v8/src/scanner.h?rcl=edf3dab4660ed6273e5d46bd2b0eae9f3210157d&l=46" target="_blank" rel="noopener"><code>UTF16CharacterStream</code></a>提供一种（可能被缓冲）UTF-16编码的方式来兼容底层Latin1、UTF-8或UTF-16编码，这些编码通过Chrome从网络上获取再传递给V8。除了支持多种编码规范外，扫描器和字符流的分离允许V8透明地扫描，就好像整个数据源是可用的一样，即使到目前为止我们可能只通过网络接收到部分数据。<br><img src="overview.svg" alt=""></p>
+<p>在扫描器和字符流之间的接口是一个命名为<a href="https://cs.chromium.org/chromium/src/v8/src/scanner.h?rcl=edf3dab4660ed6273e5d46bd2b0eae9f3210157d&l=54" target="_blank" rel="noopener"><code>Utf16CharacterStream::Advance()</code></a>的方法，它返回下一个UTF-16代码单元，或者返回-1表示输入结束。一个UTF-16代码单元不能对每个Unicode字符进行编码。<a href="https://en.wikipedia.org/wiki/Plane_(Unicode)#Basic_Multilingual_Plane" target="_blank" rel="noopener">基本多语言平面</a>之外的字符编码是两个代码单元，也称为代理对。不过，扫描器操作的是Unicode字符，而不是UTF-16代码单元，因此它将这个底层流接口封装在<a href="https://cs.chromium.org/chromium/src/v8/src/scanner.h?sq=package:chromium&g=0&rcl=edf3dab4660ed6273e5d46bd2b0eae9f3210157d&l=569" target="_blank" rel="noopener"><code>Scanner::Advance()</code></a>方法中，该方法将UTF-16代码单元解码为完整的Unicode字符。当前解码的字符由<a href="https://cs.chromium.org/chromium/src/v8/src/scanner.cc?rcl=edf3dab4660ed6273e5d46bd2b0eae9f3210157d&l=775" target="_blank" rel="noopener"><code>Scanner::ScanString()</code></a>这样的扫描方法缓冲并取走。</p>
+<p>扫描器根据最多4个字符（JavaScript中最长的模糊字符序列<a href="#fn1">[1]</a>）<a href="https://cs.chromium.org/chromium/src/v8/src/scanner.cc?rcl=edf3dab4660ed6273e5d46bd2b0eae9f3210157d&l=422" target="_blank" rel="noopener">选择</a>特定的扫描器方法或token。一旦选择了像<code>ScanString</code>这样的方法，它将处理该token的剩余字符，并为下一个扫描的token（非当前token的一部分）缓冲第一个字符。<code>ScanString</code>还将扫描的字符复制到编码为Latin1或UTF-16的缓冲区中，同时解码转义序列。</p>
+<h4 id="空白符（Whitespace）"><a href="#空白符（Whitespace）" class="headerlink" title="空白符（Whitespace）"></a>空白符（Whitespace）</h4><p>Token可以用不同类型的空白符隔开，例如换行符、空格键、制表符、单行注释、多行注释等。一种类型的空白符后可以跟其他类型的空白符。如果添加空白符导致两个token之间出现换行，则可能<a href="https://tc39.es/ecma262/#sec-automatic-semicolon-insertion" target="_blank" rel="noopener">自动插入分号</a>。因此，在扫描下一个token之前，将略过所有空白符，并记录新的换行。大多数实际的JavaScript代码是被精简的，所以多个空白符并不常见。因此，V8统一独立地扫描每种类型的空白符，就好像它们是普通的token一样。例如，假设token的第一个字符是<code>/</code>，然后紧挨着另一个<code>/</code>，V8会将其扫描为单行注释，并返回<code>Token::WHITESPACE</code>。循环持续扫描，<a href="https://cs.chromium.org/chromium/src/v8/src/scanner.cc?rcl=edf3dab4660ed6273e5d46bd2b0eae9f3210157d&l=671" target="_blank" rel="noopener">直到</a>找出非<code>Token::WHITESPACE</code>的token。这意味着，如果下一个token之前没有空白符，我们将立即开始扫描相关的token，而不需要显式地检查空白符。</p>
+<p>然而，循环本身会增加每次扫描token的开销：它需要一个分支来验证刚扫描的结果。如果我们刚刚扫描的token是<code>Token::WHITESPACE</code>，则最好继续循环。反之我们就应该跳出循环。实现这些，我们是通过将循环本身放到一个的单独的<a href="https://cs.chromium.org/chromium/src/v8/src/parsing/scanner-inl.h?rcl=d62ec0d84f2ec8bc0d56ed7b8ed28eaee53ca94e&l=178" target="_blank" rel="noopener">辅助方法</a>中，该方法在确定不是<code>Token::WHITESPACE</code>token后，就直接返回token。尽管这类修改看起来很小，但它们消除了每次扫描token的开销。对于像标点符号这样的短token来说，尤其有效：<br><img src="punctuation.svg" alt=""></p>
+<h4 id="标识符扫描"><a href="#标识符扫描" class="headerlink" title="标识符扫描"></a>标识符扫描</h4><p><a href="https://tc39.es/ecma262/#prod-Identifier" target="_blank" rel="noopener">标识符</a>是最复杂也是最常见的token，它用于JavaScript中的变量名（以及其它作用）。标识符以一个Unicode字符开头，并具有<a href="https://cs.chromium.org/chromium/src/v8/src/unicode.cc?rcl=d4096d05abfc992a150de884c25361917e06c6a9&l=807" target="_blank" rel="noopener"><code>ID_Start</code></a>属性，之后的字符序列是可选地，并具有<a href="https://cs.chromium.org/chromium/src/v8/src/unicode.cc?rcl=d4096d05abfc992a150de884c25361917e06c6a9&l=947" target="_blank" rel="noopener"><code>ID_Continue</code></a>属性。查看一个Unicode字符是否具有<code>ID_Start</code>或<code>ID_Continue</code>属性是非常消耗性能的。通过插入一个从字符到其属性的映射缓存，我们可以稍微加快速度。</p>
+<p>虽然大多数JavaScript源代码是使用ASCII字符编写的。但在ASCII字符范围中，只有<code>a-z</code>，<code>A-Z</code>，<code>$</code>和<code>_</code>是标识符的起始字符。<code>ID_Continue</code>额外的包括<code>0-9</code>。我们通过创建一个表为128个ASCII字符中的每一个添加标记，识别是<code>ID_Start</code>字符，还是<code>ID_Continue</code>字符等，从而加速标识符扫描。当我们要查看的字符在ASCII范围内时，我们在这个表中查找对应的标记，并用一个单独的分支验证属性。直到我们找到第一个没有<code>ID_Continue</code>属性的字符之前，字符都是标识符的一部分。</p>
+<p>本文中提到的所有改进加起来，在标识符扫描性能方面存在以下差异：<br><img src="identifiers-1.svg" alt=""></p>
+<p>较长的标识符扫描速度更快，这点似乎有违直觉。这可能会使你认为增加标识符长度有利于提升性能。在MB/s这个维度上，扫描较长的标识符肯定更快，因为我们在一个非常紧密的循环中停留的时间更长，而没有返回解析器。但是，从应用程序性能的角度来看，你关注的是扫描全部token的速度。下图大致展示了每秒扫描的token数与token长度的关系：<br><img src="identifiers-2.svg" alt=""></p>
+<p>这里很明显，使用较短的标识符对应用程序的解析性能是有益的：每秒我们能够扫描更多的token。这意味着，以MB/s作为衡量维度的站点看起来解析更快但信息密度较低，即实际上每秒生成的token更少。</p>
+<h4 id="内化精简标识符（Internalizing-minified-identifiers）"><a href="#内化精简标识符（Internalizing-minified-identifiers）" class="headerlink" title="内化精简标识符（Internalizing minified identifiers）"></a>内化精简标识符（Internalizing minified identifiers）</h4><p>在扫描程序和解析器的边界上，所有字符串字面量和标识符都将删除重复数据。如果解析器请求字符串或标识符的值，对于每个可能的文本值，解析器将收到一个唯一的字符串对象。这通常需要一个哈希表来查找。由于JavaScript代码经常被精简，因此V8对单一的ASCII字符串使用简单的查询表。</p>
+<h4 id="关键字（Identifier-scanning）"><a href="#关键字（Identifier-scanning）" class="headerlink" title="关键字（Identifier scanning）"></a>关键字（Identifier scanning）</h4><p>关键字是由编程语言定义的标识符的特殊子集，例如<code>if</code>、<code>else</code>和<code>function</code>。V8的扫描器返回的关键字token与标识符不同。扫描标识符后，我们需要识别该标识符是否是关键字。由于JavaScript中的所有关键字只包含小写字符a-z，所以我们还保留了一些标记，用来表明ASCII字符是否可能是关键字start和continue字符。</p>
+<p>如果一个标识符根据标记可能是关键字，我们可以通过匹配标识符的第一个字符来找到候选关键字的子集。第一个字符比关键字的长度更独特，因此减少了后续条件分支的数量。对于每个字符，我们基于可能的关键字长度进行条件判断，并且只在长度相等的情况下再将标识符与关键字进行比较。</p>
+<p>更好的方法是使用一种名为<a href="https://en.wikipedia.org/wiki/Perfect_hash_function" target="_blank" rel="noopener">完美哈希</a>的技术。由于关键字列表是静态的，我们可以计算出一个完美的哈希函数，对于每个标识符该函数最多只能给我们一个候选关键字。V8使用<a href="https://www.gnu.org/software/gperf/" target="_blank" rel="noopener">gperf</a>来计算这个函数。<a href="https://cs.chromium.org/chromium/src/v8/src/parsing/keywords-gen.h" target="_blank" rel="noopener">结果</a>是根据标识符的长度和前两个字符计算出哈希，用来找到唯一候选关键字。只有当关键字的长度与输入标识符的长度匹配时，我们才比较标识符和关键字。这尤其加快了识别出标识符不是关键字的情况，因为我们只需要较少的条件分支来判断它。<br><img src="keywords.svg" alt=""></p>
+<h4 id="代理对（Surrogate-pairs）"><a href="#代理对（Surrogate-pairs）" class="headerlink" title="代理对（Surrogate pairs）"></a><a href="https://baike.baidu.com/item/surrogate%20pair" target="_blank" rel="noopener">代理对（Surrogate pairs）</a></h4><p>如前所述，我们的扫描器工作在UTF-16编码的字符流上，但处理的是Unicode字符。<a href="https://zh.wikipedia.org/wiki/Unicode%E5%AD%97%E7%AC%A6%E5%B9%B3%E9%9D%A2%E6%98%A0%E5%B0%84" target="_blank" rel="noopener">补充平面</a>中的字符只对标识符token有特殊意义。例如，假设这样的字符出现在字符串中，它们不会终止字符串。JS支持单个代理（Lone Surrogates），并且只从源代码复制。因此，除非绝对必要，最好避免组合代理对，并让扫描器直接对UTF-16代码单元进行操作而不是Unicode字符。当我们扫描一个字符串时，我们不需要寻找代理对，组合它们，然后在我们构建文本时再次拆分存储的字符。扫描器只剩下两个地方需要处理代理对。在token扫描开始时，只有当我们不能将识别某个字符时，才需要<a href="https://cs.chromium.org/chromium/src/v8/src/parsing/scanner-inl.h?rcl=d4096d05abfc992a150de884c25361917e06c6a9&l=515" target="_blank" rel="noopener">组合</a>代理对用来检查结果是否是标识符开始。类似地，在处理非ASCII字符的标识符扫描的慢路径中，我们需要<a href="https://cs.chromium.org/chromium/src/v8/src/parsing/scanner.cc?rcl=d4096d05abfc992a150de884c25361917e06c6a9&l=1003" target="_blank" rel="noopener">组合</a>代理对。</p>
+<h4 id="AdvanceUntil"><a href="#AdvanceUntil" class="headerlink" title="AdvanceUntil"></a>AdvanceUntil</h4><p>扫描器和<code>UTF16CharacterStream</code>之间的接口边界是有状态的。流会记录它在缓冲区中的位置，在处理完每个代码单元之后，位置随之递增。在扫描器再次调用请求字符的扫描方法之前，会先缓冲一个已接收的代码单元。那个扫描方法读取缓冲的字符并且基于字符的值继续执行。这提供了很好的分层，但相当慢。去年秋天，我们的实习生Florian Sattler提出了一个改进的接口，它既保留了分层的优点，又能够在流中更快的访问代码单元。一个模板化的函数<a href="https://cs.chromium.org/chromium/src/v8/src/parsing/scanner.h?rcl=d4096d05abfc992a150de884c25361917e06c6a9&l=72" target="_blank" rel="noopener"><code>AdvanceUntil</code></a>，专门用于特定的扫描辅助函数，在流中每个字符都调用该辅助函数，直到辅助函数返回<code>false</code>。这本质上为扫描器提供了对底层数据的直接访问，而不会破坏抽象。它实际上简化了扫描辅助函数，因为它们不需要处理<code>EndOfInput</code>。<br><img src="advanceuntil.svg" alt=""></p>
+<p><code>AdvanceUntil</code>对于加速可能需要消耗大量字符的扫描函数特别有用。我们用它来加速前面已经提到的标识符，以及字符串<a href="#fn2">[2]</a>和注释。</p>
+<h4 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h4><p>扫描性能是解析器性能的基石。我们已经调整了扫描器，使之尽可能的高效。这导致了全面的改进，单token扫描的性能提高了大约1.4倍，字符串扫描提高了1.3倍，多行注释扫描提高了2.1倍，标识符扫描提高了1.2–1.5倍，这取决于标识符的长度。</p>
+<p>我们的扫描器只能做这么多。作为开发人员，你可以通过增加程序的信息密度来进一步提高解析性能。最简单的方法是精简源代码，去掉不必要的空白符，并尽可能避免非ASCII标识符。理想情况下，这些步骤作为构建过程的一部分是自动化的，在这种情况下，编写代码时不必担心它。</p>
+<hr>
+<ol>
+<li><code>&lt;!--</code>是HTML注释的开始，而<code>&lt;!-</code>扫描为“小于”、“非”、“减”。<a name="fn1">[↩︎]</a></li>
+<li>不能用Latin1编码的字符串和标识符目前比较消耗性能，因为我们首先尝试将它们作为Latin1进行缓冲，一旦遇到不能用Latin1编码的字符，就将它们转换成UTF-16。<a name="fn2">[↩︎]</a></li>
+</ol>
+
+
+  </article>
+  </script>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js">
+  </script>
+  <div class="busuanzi center">
+    page PV:&nbsp;<span id="busuanzi_value_page_pv"></span>&nbsp;・&nbsp;
+    site PV:&nbsp;<span id="busuanzi_value_site_pv"></span>&nbsp;・&nbsp;
+    site UV:&nbsp;<span id="busuanzi_value_site_uv"></span>
+  </div>
+
+
+    
+
+
+
+
+
+    </div>
+  </div>
+  <footer class="page-footer"><div class="clearfix">
+</div>
+<div class="right-foot">
+    <div class="firstrow">
+        <a href="#top" target="_self">
+        <svg class="i-caret-right" viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+            <path d="M10 30 L26 16 10 2 Z"></path>
+        </svg>
+        </a>
+        © 100001 2020
+    </div>
+    <div class="secondrow">
+        <a href="https://github.com/100001/100001.github.io/issues" target="_blank" rel="noopener">
+        ☞评论
+        </a>
+    </div>
+</div>
+<div class="clearfix">
+</div>
+</footer>
+  <script src="//cdn.bootcss.com/jquery/2.2.1/jquery.min.js"></script>
+<script src="/js/search.min.js"></script>
+<script type="text/javascript">
+
+// disqus scripts
+
+
+// dropdown scripts
+$(".dropdown").click(function(event) {
+  var current = $(this);
+  event.stopPropagation();
+  $(current).children(".dropdown-content")[($(current).children(".dropdown-content").hasClass("open"))?'removeClass':'addClass']("open")
+});
+$(document).click(function(){
+    $(".dropdown-content").removeClass("open");
+})
+
+var path = "/search.xml";
+searchFunc(path, 'local-search-input', 'local-search-result');
+
+</script>
+
+</body>
+</html>
