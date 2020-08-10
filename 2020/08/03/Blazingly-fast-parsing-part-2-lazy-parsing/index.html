@@ -74,7 +74,7 @@
     </div>
     <h4 id="原文→"><a href="#原文→" class="headerlink" title="原文→"></a><a href="https://v8.dev/blog/preparser" target="_blank" rel="noopener">原文→</a></h4><p>这是本系列文章的第二部分，介绍V8如何尽可能快地解析JavaScript。第一部分解释了我们如何使V8的<a href="/2020/08/03/Blazingly-fast-parsing-part-1-optimizing-the-scanner/">扫描器</a>更快。</p>
 <p>解析是将源代码转换为中间代码的步骤，中间代码由编译器处理（在V8中，<a href="https://v8.dev/blog/ignition-interpreter" target="_blank" rel="noopener">Ignition</a>是字节码编译器）。解析和编译是在网页启动的关键路径上进行的，在启动过程中，并非所有发送到浏览器的函数都是立即必要的。虽然开发人员可以使用async和defer脚本来延迟这类代码，但这并不总是可行的。此外，许多web页面提供的代码仅供某些功能使用，而这些功能在页面单独运行的任何时候可能根本无法被用户访问。</p>
-<p>非必要地主动（eagerly）编译代码会带来实际的资源开销：</p>
+<p>非必要地主动（<a href="https://keqingrong.github.io/blog/2019-06-30-cs-words-2#eager" target="_blank" rel="noopener">eagerly</a>）编译代码会带来实际的资源开销：</p>
 <ul>
 <li>CPU周期被用于生成代码，对于启动实际需要的代码来说，耽误其可用性。</li>
 <li>代码对象占用内存，至少直到当前不需要该代码并允许对其进行垃圾回收为止，才决定<a href="https://v8.dev/blog/v8-release-74#bytecode-flushing" target="_blank" rel="noopener">刷新字节码（bytecode flushing）</a>。</li>
