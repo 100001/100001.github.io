@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://100001.github.io/2020/08/10/Understanding-JavaScript-%E2%80%94-Heap-Stack-Event-loops-and-Callback-Queue/</loc>
+    
+    <lastmod>2020-08-11T05:49:41.527Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>https://100001.github.io/2020/08/03/Blazingly-fast-parsing-part-2-lazy-parsing/</loc>
     
     <lastmod>2020-08-10T11:06:13.084Z</lastmod>

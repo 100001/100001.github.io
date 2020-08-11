@@ -1,0 +1,184 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="google-site-verification" content="" />
+  
+  <title>理解JavaScript：堆，栈，事件循环与回调队列</title>
+  <meta name="author" content="Zhongwen Wang">
+  <meta name="description" content="原文→JavaScript是一种单线程语言，它与大多数语言不同。它缺乏多线程应用程序的能力，也因此不必处理死锁或共享变量等复杂问题。
+单线程？单线程语言将缺少同时运行的并发进程。这意味着，如果有一个进程需要很长时间，那么它将阻止其他进程运行。因此，浏览器中定义了一个等待进程响应的超时（timeout">
+  
+  
+  <meta property="og:title" content="理解JavaScript：堆，栈，事件循环与回调队列"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:site_name" content="100001"/>
+  <link href="/apple-touch-icon-precomposed.png" sizes="180x180" rel="apple-touch-icon-precomposed">
+  <link rel="alternate" href="/atom.xml" title="100001" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/m.min.css">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML" async></script>
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+  <a id="top"></a>
+  <div id="main">
+    <div class="main-ctnr">
+      <div class="behind">
+  <a href="/" class="back black-color">
+    <svg class="i-close" viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+        <path d="M2 30 L30 2 M30 30 L2 2"></path>
+    </svg>
+  </a>
+  <div class="description">
+    &nbsp;
+  </div>
+</div>
+
+
+  <article class="standard post">
+    <div class="title">
+      
+  
+    <h1 class="page-title center">
+        理解JavaScript：堆，栈，事件循环与回调队列
+    </h1>
+  
+
+
+    </div>
+    <div class="meta center">
+      <time datetime="2020-08-10T11:45:17.000Z" itemprop="datePublished">
+  <svg class="i-calendar" viewBox="0 0 32 32" width="16" height="16" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M2 6 L2 30 30 30 30 6 Z M2 15 L30 15 M7 3 L7 9 M13 3 L13 9 M19 3 L19 9 M25 3 L25 9"></path>
+  </svg>
+  &nbsp;
+  2020-08-10
+</time>
+
+
+
+
+
+
+    </div>
+    <hr>
+    
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#原文→"><span class="toc-text">原文→</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#单线程？"><span class="toc-text">单线程？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#JavaScript环境"><span class="toc-text">JavaScript环境</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#堆（Heap）"><span class="toc-text">堆（Heap）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#栈（Stack）"><span class="toc-text">栈（Stack）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Web-API"><span class="toc-text">Web API</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#回调队列（Callback-Queue）"><span class="toc-text">回调队列（Callback Queue）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#事件循环（Event-Loop）"><span class="toc-text">事件循环（Event Loop）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#例子"><span class="toc-text">例子</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#参考文献"><span class="toc-text">参考文献</span></a></li></ol>
+    
+    <div class="picture-container">
+      
+    </div>
+    <h4 id="原文→"><a href="#原文→" class="headerlink" title="原文→"></a><a href="https://medium.com/javascript-in-plain-english/understanding-javascript-heap-stack-event-loops-and-callback-queue-6fdec3cfe32e" target="_blank" rel="noopener">原文→</a></h4><p>JavaScript是一种单线程语言，它与大多数语言不同。它缺乏多线程应用程序的能力，也因此不必处理死锁或共享变量等复杂问题。</p>
+<h4 id="单线程？"><a href="#单线程？" class="headerlink" title="单线程？"></a>单线程？</h4><p>单线程语言将缺少同时运行的并发进程。这意味着，如果有一个进程需要很长时间，那么它将<strong>阻止其他进程</strong>运行。因此，浏览器中定义了一个等待进程响应的超时（timeout）。当进程在超时时间内没有响应，将看到一个弹出窗口，询问是否终止进程。</p>
+<blockquote>
+<p><font size=4>不要在浏览器上运行任何需要很长时间的业务，以免阻塞其他功能。</font></p>
+</blockquote>
+<p>那么，JavaScript如何模拟在多线程环境中运行我们的命令呢？为了回答这个问题，让我们深入了解JavaScript环境。</p>
+<h4 id="JavaScript环境"><a href="#JavaScript环境" class="headerlink" title="JavaScript环境"></a>JavaScript环境</h4><p><img src="1_hTvFVz2Aw2w8wbMC_QPFXQ.png" alt=""></p>
+<p>尽管JavaScript是一种单线程语言，但我们有一个强大的助手，即浏览器，它能够管理复杂的操作。 Web API、回调队列和事件循环机制是浏览器的一部分。</p>
+<p>让我们深入了解每一部分的细节。</p>
+<h4 id="堆（Heap）"><a href="#堆（Heap）" class="headerlink" title="堆（Heap）"></a>堆（Heap）</h4><p>堆是我们定义变量时存储对象的地方（内存）。</p>
+<h4 id="栈（Stack）"><a href="#栈（Stack）" class="headerlink" title="栈（Stack）"></a>栈（Stack）</h4><p>栈保存函数调用。每次调用新函数时，它都被推到栈的顶部。当JavaScript出现异常时，可以通过栈追踪（stack trace）查看栈。</p>
+<blockquote>
+<p><font size=4>译者注：Stack也翻译为堆栈</font></p>
+</blockquote>
+<h4 id="Web-API"><a href="#Web-API" class="headerlink" title="Web API"></a>Web API</h4><p>浏览器已经定义了API，开发人员可以使用这些API来处理复杂的流程，例如获取访问者的位置，<code>GeoLocation</code>已经被定义。可以在<a href="#fn1">参考文献（1）</a>的链接中找到定义的API列表。</p>
+<h4 id="回调队列（Callback-Queue）"><a href="#回调队列（Callback-Queue）" class="headerlink" title="回调队列（Callback Queue）"></a>回调队列（Callback Queue）</h4><p>当一个进程完成它的工作（比如<code>xhr</code>调用）时，它将被放入回调队列中。事件循环进程在栈为空后触发回调队列，这意味着进程将在该队列中等待，直到栈为空。一旦我们的栈没有函数调用，就会从回调队列中弹出一个进程并将其推入栈。</p>
+<h4 id="事件循环（Event-Loop）"><a href="#事件循环（Event-Loop）" class="headerlink" title="事件循环（Event Loop）"></a>事件循环（Event Loop）</h4><p>负责检查栈并持续触发回调队列的进程。</p>
+<h4 id="例子"><a href="#例子" class="headerlink" title="例子"></a>例子</h4><p><img src="1_04E2hwNjD7cJgSTrdw51bQ.png" alt=""></p>
+<p>以上例子的预期输出是什么？它以一个<code>console.log</code>开始，然后继续一个<code>setTimeout</code>函数，我们想通过给一个”0”的超时来<strong>立即运行</strong>，然后是另一个<code>console.log</code>。</p>
+<blockquote>
+<p><font size=4><strong>setTimeout</strong>是个特别的函数。它没有定义在ECMAScript规范中，只是一个<a href="#fn2">Web API（2）</a>。它是异步工作的，不能保证函数在给定的超时时间后工作，但保证它至少会等待给定的时间。所以<code>setTimeout(fn,0)</code>不会立即启动，但至少要等待0毫秒。</font></p>
+</blockquote>
+<p><img src="1_sDleG8vaNiYEk_FiCgzlQA.gif" alt=""></p>
+<p>解释一下，当我们在上面运行代码片段时，它将如何运行。</p>
+<ol>
+<li>我们的第一个<code>console.log(“Murat”)</code>将被压入栈，因为我们正在进行函数调用。</li>
+<li>变量<code>Murat</code>将保存在堆（内存）中。</li>
+<li>因为它不是异步调用，所以它将输出给定的参数。</li>
+<li>第一个<code>console.log</code>函数将从栈中移除，堆将置为空。</li>
+<li><code>setTimeout</code>函数将被调用。因此它将被压入栈。</li>
+<li>它即是一个异步函数也是一个Web API函数。它将被放入Web API的方块里，并且<code>setTimeout</code>函数将从栈中移除。</li>
+<li>后台的计时器将启动，以等待至少给定的时间来设置超时。</li>
+<li><code>console.log(“Yusuf”)</code>将被调用，并且它将被压入栈，变量<code>Yusuf</code>将存储在堆中。</li>
+<li>它将输<code>Yusuf</code>。但同时，我们的事件循环将继续检查栈的状态。</li>
+<li>在输出<code>Yusuf</code>之后，它将从栈和堆中移除。</li>
+<li>当计时器确定它至少等待了给定的时间后，它将被推入回调队列(<code>console.log(“Fatih”)</code>）</li>
+<li>当栈为空时，事件循环将触发回调队列。</li>
+<li>接下来，<code>console.log(“Fatih”)</code>将被压入栈。</li>
+</ol>
+<p>因此，输出的顺序是：<code>Murat</code>，<code>Yusuf</code>，<code>Fatih</code>。</p>
+<hr>
+<h4 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h4><ol>
+<li>Web API 列表：<a href="https://developer.mozilla.org/en-US/docs/Web/API" target="_blank" rel="noopener">https://developer.mozilla.org/en-US/docs/Web/API</a> <a name="fn1">[↩︎]</a></li>
+<li>setTimeout 规范：<a href="https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/setTimeout" target="_blank" rel="noopener">https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/setTimeout</a> <a name="fn2">[↩︎]</a></li>
+</ol>
+
+
+  </article>
+  </script>
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js">
+  </script>
+  <div class="busuanzi center">
+    page PV:&nbsp;<span id="busuanzi_value_page_pv"></span>&nbsp;・&nbsp;
+    site PV:&nbsp;<span id="busuanzi_value_site_pv"></span>&nbsp;・&nbsp;
+    site UV:&nbsp;<span id="busuanzi_value_site_uv"></span>
+  </div>
+
+
+    
+
+
+
+
+
+    </div>
+  </div>
+  <footer class="page-footer"><div class="clearfix">
+</div>
+<div class="right-foot">
+    <div class="firstrow">
+        <a href="#top" target="_self">
+        <svg class="i-caret-right" viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentcolor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+            <path d="M10 30 L26 16 10 2 Z"></path>
+        </svg>
+        </a>
+        © 100001 2020
+    </div>
+    <div class="secondrow">
+        <a href="https://github.com/100001/100001.github.io/issues" target="_blank" rel="noopener">
+        ☞评论
+        </a>
+    </div>
+</div>
+<div class="clearfix">
+</div>
+</footer>
+  <script src="//cdn.bootcss.com/jquery/2.2.1/jquery.min.js"></script>
+<script src="/js/search.min.js"></script>
+<script type="text/javascript">
+
+// disqus scripts
+
+
+// dropdown scripts
+$(".dropdown").click(function(event) {
+  var current = $(this);
+  event.stopPropagation();
+  $(current).children(".dropdown-content")[($(current).children(".dropdown-content").hasClass("open"))?'removeClass':'addClass']("open")
+});
+$(document).click(function(){
+    $(".dropdown-content").removeClass("open");
+})
+
+var path = "/search.xml";
+searchFunc(path, 'local-search-input', 'local-search-result');
+
+</script>
+
+</body>
+</html>
